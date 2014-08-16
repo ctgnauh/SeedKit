@@ -8,6 +8,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 env/
+venv/
 bin/
 build/
 develop-eggs/
@@ -21,6 +22,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+*.torrent
 
 # Installer logs
 pip-log.txt

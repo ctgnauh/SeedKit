@@ -13,6 +13,10 @@ class SeedKit(object):
     def __init__(self, bdict):
         self.bdict = bdict
         self.info = self.bdict['info']
+        if self.onlyone_file_p():
+            self.files = [self.get_name()]
+        else:
+            self.files = self.info['files']
 
     def set_sth(self, root, name, sth, utf8=False):
         if utf8:
@@ -62,16 +66,16 @@ class SeedKit(object):
         return self.get_sth(self.info, 'name')
 
     def set_path(self, index, path, utf8=False):
-        self.set_sth(self.info['files'][index], 'path', path, utf8)
+        self.set_sth(self.files[index], 'path', path, utf8)
 
     def set_path_smart(self, index, path):
-        self.set_sth_smart(self.info['files'][index], 'path', path)
+        self.set_sth_smart(self.files[index], 'path', path)
 
     def get_path(self, index):
-        return self.get_sth(self.info.get('files')[index], 'path')
+        return self.get_sth(self.files[index], 'path')
 
     def total_file(self):
-        return len(self.info.get('files'))
+        return len(self.files)
 
     def onlyone_file_p(self):
         if 'files' not in self.info:
@@ -138,6 +142,32 @@ class SeedKit(object):
                                                      ignore_keywords))
                 self.set_path_smart(i, newpath)
 
+    def _gen_line(self, name, depth, dir_p=False):
+        space = ''
+        line = ''
+        sep = ''
+        for i in range(depth):
+            space += '|   '
+        if dir_p:
+            sep = '/'
+        line = space + '|---' + name + sep
+        return line
+
+    def print_tree(self):
+        paths = [i.get('path') for i in self.files]
+        printed = []
+        for path in paths:
+            depth = len(path) - 1
+            for element in path:
+                current_depth = path.index(element)
+                dir_p = False
+                if element in printed:
+                    continue
+                if current_depth < depth:
+                    printed.append(element)
+                    dir_p = True
+                print self._gen_line(element, current_depth, dir_p)
+
 
 def main():
     # args
@@ -147,6 +177,7 @@ def main():
     parser.add_argument('-c', default='', dest='comment')
     parser.add_argument('-o', default='', dest='outputname')
     parser.add_argument('-m', action='store_true', dest='magnet')
+    parser.add_argument('-p', action='store_true', dest='tree')
     parser.add_argument('filename')
     args = parser.parse_args()
 
@@ -158,6 +189,11 @@ def main():
     # to_magnet
     if args.magnet:
         print torrent.to_magnet()
+        return 1
+
+    # print file tree
+    if args.tree:
+        torrent.print_tree()
         return 1
 
     # rename_shortcut
