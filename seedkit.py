@@ -109,12 +109,12 @@ class Torrent(object):
     def _rename_file(self, filename, ignore_types, ignore_keywords):
         splitname = filename.rsplit('.', 1)
         if len(splitname) == 1:
-            splitname = (splitname, '')
+            splitname = (splitname, None)
         basename, filetype = splitname
         if (filetype not in ignore_types) and \
                 (not self._match_keywords(filename, ignore_keywords)):
             newname = base64.b64encode(filename)
-            if filetype != '':
+            if filetype is not None:
                 newname = newname + '.' + filetype
             return newname
         return filename
@@ -124,16 +124,12 @@ class Torrent(object):
         # 替换注释
         self.set_comment_smart(comment)
         # 替换文件名与路径
-        if self.onlyone_file_p() is True:
-            # 只有一个文件
-            filename = self.get_name()
-            newname = self._rename_file(filename,
-                                        ignore_types,
-                                        ignore_types)
-            self.set_name(newname)
-            if 'name.utf-8' in self.info:
-                self.set_name(newname, True)
-        else:
+        filename = self.get_name()
+        newname = self._rename_file(filename,
+                                    ignore_types,
+                                    ignore_keywords)
+        self.set_name_smart(newname)
+        if self.onlyone_file_p() is False:
             # 多个文件
             for i in range(self.total_file()):
                 newpath = []
