@@ -182,15 +182,19 @@ class Magnet(object):
             return None
         return result
 
-    def _save_torrent(self):
+    def download_torrent(self,
+                         baseurl='http://torcache.net/torrent/%s.torrent',
+                         gzip=True):
         # http://torcache.net/torrent/INFO_HASH.torrent
-        url = 'http://torcache.net/torrent/%s.torrent' % self.infohash
-        zip_file = self._urllib_downloader(url)
-        try:
-            unzip_file = zlib.decompress(zip_file.read(), 16+zlib.MAX_WBITS)
-        except zlib.error:
-            return None
-        return unzip_file
+        url = baseurl % self.infohash
+        result = self._urllib_downloader(url)
+        if gzip:
+            try:
+                unzip = zlib.decompress(result.read(), 16+zlib.MAX_WBITS)
+            except zlib.error:
+                return None
+            return unzip
+        return result
 
     def is_magnet_p(self):
         # 单纯输入40位的 info hash
@@ -201,8 +205,8 @@ class Magnet(object):
             return True
         return False
 
-    def to_torrent(self, path=None):
-        result = self._save_torrent()
+    def to_torrent(self, path=''):
+        result = self.download_torrent()
         if result is None:
             return 0
         f = open(os.path.join(path, self.infohash+'.torrent'), 'w')
