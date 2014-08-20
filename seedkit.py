@@ -2,14 +2,16 @@
 # -*- coding: utf-8 -*-
 
 
+import re
+import zlib
 import base64
 import hashlib
-from optparse import OptionParser
+import urllib
 from argparse import ArgumentParser
 import bencode
 
 
-class SeedKit(object):
+class Torrent(object):
     def __init__(self, bdict):
         self.bdict = bdict
         self.info = self.bdict['info']
@@ -90,7 +92,7 @@ class SeedKit(object):
         return hashlib.sha1(encoded_info).hexdigest()
 
     def to_magnet(self):
-        infohash = self.gen_infohash()
+        infohash = self.gen_infohash().upper()
         name = 'Unnamed'
         if 'name' in self.info:
             name = self.get_name()
@@ -107,12 +109,12 @@ class SeedKit(object):
     def _rename_file(self, filename, ignore_types, ignore_keywords):
         splitname = filename.rsplit('.', 1)
         if len(splitname) == 1:
-            splitname = (splitname, '')
+            splitname = (splitname, None)
         basename, filetype = splitname
         if (filetype not in ignore_types) and \
                 (not self._match_keywords(filename, ignore_keywords)):
             newname = base64.b64encode(filename)
-            if filetype != '':
+            if filetype is not None:
                 newname = newname + '.' + filetype
             return newname
         return filename
@@ -122,16 +124,12 @@ class SeedKit(object):
         # 替换注释
         self.set_comment_smart(comment)
         # 替换文件名与路径
-        if self.onlyone_file_p is True:
-            # 只有一个文件
-            filename = self.get_name()
-            newname = self._replace_filename(filename,
-                                             ignore_types,
-                                             ignore_types)
-            self.set_name(newname)
-            if 'name.utf-8' in self.info:
-                self.set_name(newname, True)
-        else:
+        filename = self.get_name()
+        newname = self._rename_file(filename,
+                                    ignore_types,
+                                    ignore_keywords)
+        self.set_name_smart(newname)
+        if self.onlyone_file_p() is False:
             # 多个文件
             for i in range(self.total_file()):
                 newpath = []
@@ -169,46 +167,95 @@ class SeedKit(object):
                 print self._gen_line(element, current_depth, dir_p)
 
 
+class Magnet(object):
+    def __init__(self, magnet):
+        self.magnet = magnet
+        self.infohash = None
+        if self.is_magnet_p():
+            self.infohash = re.search('[\w\d]{40}', magnet).group()
+
+    def _urllib_downloader(self, url):
+        try:
+            result = urllib.urlopen(url)
+        except:
+            return None
+        return result
+
+    def _save_torrent(self):
+        # http://torcache.net/torrent/INFO_HASH.torrent
+        url = 'http://torcache.net/torrent/%s.torrent' % self.infohash
+        zip_file = self._urllib_downloader(url)
+        try:
+            unzip_file = zlib.decompress(zip_file.read(), 16+zlib.MAX_WBITS)
+        except zlib.error:
+            return None
+        return unzip_file
+
+    def is_magnet_p(self):
+        # 单纯输入40位的 info hash
+        if len(self.magnet) == 40 and re.search('[\w\d]{40}', self.magnet):
+            return True
+        # 输入完整的 magnet 链接
+        if len(self.magnet) > 40 and 'magnet:?xt=urn:btih:' in self.magnet:
+            return True
+        return False
+
+    def to_torrent(self, path=''):
+        result = self._save_torrent()
+        if result is None:
+            return 0
+        f = open(self.infohash+'.torrent', 'w')
+        f.write(result)
+        f.close()
+        return 1
+
+
 def main():
     # args
-    parser = ArgumentParser(usage='%(prog)s [option] filename')
-    parser.add_argument('-t', nargs='+', default=[], dest='types')
-    parser.add_argument('-k', nargs='+', default=[], dest='keywords')
+    parser = ArgumentParser(usage='%(prog)s [OPTION] FILE')
+    parser.add_argument('-t', default='', dest='types')
+    parser.add_argument('-k', default='', dest='keywords')
     parser.add_argument('-c', default='', dest='comment')
     parser.add_argument('-o', default='', dest='outputname')
-    parser.add_argument('-m', action='store_true', dest='magnet')
-    parser.add_argument('-p', action='store_true', dest='tree')
-    parser.add_argument('filename')
+    parser.add_argument('-m', action='store_true', dest='to_magnet')
+    parser.add_argument('-p', action='store_true', dest='print_tree')
+    parser.add_argument('-M', action='store_true', dest='magnet')
+    parser.add_argument('-f', action='store_true', dest='to_torrent')
+    parser.add_argument('file')
     args = parser.parse_args()
 
-    # read torrent
-    input_file = open(args.filename, 'r').read()
-    bdict = bencode.bdecode(input_file)
-    torrent = SeedKit(bdict)
-
-    # to_magnet
-    if args.magnet:
-        print torrent.to_magnet()
+    if args.magnet is False:
+        # load torrent
+        input_file = open(args.file, 'r').read()
+        bdict = bencode.bdecode(input_file)
+        torrent = Torrent(bdict)
+        # convert torrent to magnet
+        if args.to_magnet:
+            print torrent.to_magnet()
+            return 1
+        # print tree
+        if args.print_tree:
+            torrent.print_tree()
+            return 1
+        # rename_shortcut
+        keywords = args.keywords.split(' ')
+        types = args.types.split(' ')
+        if args.outputname == '':
+            args.outputname = 'fixed_'+args.file
+        if args.comment == '':
+            torrent.rename_shortcut(types, keywords)
+        else:
+            torrent.rename_shortcut(types, keywords, args.comment)
+        # write torrent
+        output_file = open(args.outputname, 'w')
+        output_file.write(bencode.bencode(torrent.export()))
+        output_file.close()
         return 1
-
-    # print file tree
-    if args.tree:
-        torrent.print_tree()
-        return 1
-
-    # rename_shortcut
-    if args.outputname == '':
-        args.outputname = 'fixed_'+args.filename
-    if args.comment == '':
-        torrent.rename_shortcut(args.types, args.keywords)
     else:
-        torrent.rename_shortcut(args.types, args.keywords, comment)
-
-    # write torrent
-    output_file = open(args.outputname, 'w')
-    output_file.write(bencode.bencode(torrent.export()))
-    output_file.close()
-    return 1
+        # load magnet
+        if args.to_torrent:
+            magnet = args.file
+            return Magnet(magnet).to_torrent()
 
 
 if __name__ == "__main__":
