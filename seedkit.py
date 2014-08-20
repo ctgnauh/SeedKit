@@ -170,7 +170,9 @@ class Torrent(object):
 class Magnet(object):
     def __init__(self, magnet):
         self.magnet = magnet
-        self.infohash = re.search('[\w\d]{40}', magnet).group()
+        self.infohash = None
+        if self.is_magnet_p():
+            self.infohash = re.search('[\w\d]{40}', magnet).group()
 
     def _urllib_downloader(self, url):
         try:
@@ -189,11 +191,20 @@ class Magnet(object):
             return None
         return unzip_file
 
+    def is_magnet_p(self):
+        # 单纯输入40位的 info hash
+        if len(self.magnet) == 40 and re.search('[\w\d]{40}', self.magnet):
+            return True
+        # 输入完整的 magnet 链接
+        if len(self.magnet) > 40 and 'magnet:?xt=urn:btih:' in self.magnet:
+            return True
+        return False
+
     def to_torrent(self, path=''):
-        f = open(self.infohash+'.torrent', 'w')
         result = self._save_torrent()
         if result is None:
             return 0
+        f = open(self.infohash+'.torrent', 'w')
         f.write(result)
         f.close()
         return 1
