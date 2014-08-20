@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
+import os
 import re
 import zlib
 import base64
@@ -200,11 +201,11 @@ class Magnet(object):
             return True
         return False
 
-    def to_torrent(self, path=''):
+    def to_torrent(self, path=None):
         result = self._save_torrent()
         if result is None:
             return 0
-        f = open(self.infohash+'.torrent', 'w')
+        f = open(os.path.join(path, self.infohash+'.torrent'), 'w')
         f.write(result)
         f.close()
         return 1
