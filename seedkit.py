@@ -57,7 +57,10 @@ class Torrent(object):
         self.bdict['encoding'] = encoding
 
     def get_encoding(self):
-        return self.bdict.get('encoding')
+        encoding = self.bdict.get('encoding')
+        if encoding:
+            return encoding
+        return 'ascii'
 
     def set_name(self, name, utf8=False):
         self.set_sth(self.info, 'name', name, utf8)
